@@ -31,6 +31,8 @@ c10::intrusive_ptr<ConvPackedParamsBase<kSpatialDim>> PackedConvWeightCudnn<
         torch::List<int64_t> dilation,
         int64_t groups,
         bool transpose) {
+  // TODO: need to check out to implement groups for conv operator in Conv.cpp
+  TORCH_CHECK(groups == 1, "Quantized cudnn conv2d is currenty limited to groups = 1; received groups =", groups);
   TORCH_CHECK(weight.qscheme() == c10::kPerTensorAffine, "Unsupported qscheme: ", toString(weight.qscheme()));
   TORCH_CHECK(
       weight.ndimension() == kSpatialDim + 2,
@@ -72,6 +74,21 @@ c10::intrusive_ptr<ConvPackedParamsBase<kSpatialDim>> PackedConvWeightCudnn<
     // bias_contig = bias->contiguous();
   }
 
+  // cudnn v8.4.0 expects conv2d's weight tensor's input and output channels to be a multiple of 4. if it is not
+  // we need to explicitly pad it to a multiple of 4 ourselves as cudnn does not currently support padding.
+  // TODO: when and if cudnn enables padding in their operators, we can remove padding on our end;
+  // currently, limit padding support to groups=1 (ungrouped conv)
+  // TODO: implement this for groups > 1
+  auto num_output_channels = weight.size(0);
+  if (weight.size(0) % 4 != 0 || weight.size(1) % 4 != 0) {
+    int8_t nslices2pad_out = (4 - weight.size(0) % 4) % 4; // number of slices we need to pad/add for output channels
+    int8_t nslices2pad_in = (4 - weight.size(1) % 4) % 4; // number of slices we need to pad/add for (input channels / groups)
+    weight = at::pad(weight, {0, 0, 0, 0, 0, nslices2pad_in, 0, nslices2pad_out}, "constant", 0);
+    if (bias.has_value()) {
+      bias.value() = at::pad(bias.value(), {0, nslices2pad_out}, "constant", 0);
+    }
+  }
+
   auto ret_ptr = c10::make_intrusive<PackedConvWeightCudnn<kSpatialDim>>(
           weight.to(c10::MemoryFormat::ChannelsLast), // TODO: this assumes 2D I think. make it more general?
           bias,
@@ -81,7 +98,8 @@ c10::intrusive_ptr<ConvPackedParamsBase<kSpatialDim>> PackedConvWeightCudnn<
           dilation,
           groups,
           transpose,
-          qtype);
+          qtype,
+          num_output_channels);
   return ret_ptr;
 }
 
