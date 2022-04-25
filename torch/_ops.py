@@ -62,6 +62,10 @@ class OpOverload:
         return self._overloadpacket
 
     @property
+    def overloadname(self):
+        return self._overloadname
+
+    @property
     def op(self):
         return self._op
 
