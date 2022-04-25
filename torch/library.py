@@ -3,7 +3,7 @@ from ._ops import OpOverload
 from typing import Set
 import warnings
 
-__all__ = ['extend_library']
+__all__ = ['extend_library', 'create_library']
 
 # User created fragment libraries to extend existing libraries
 fragments_for_existing_libraries = {}
@@ -41,7 +41,6 @@ class Library:
         else:
             raise RuntimeError("impl should be passed either a name or an OpOverload object as the first argument")
 
-        print("--------", name, self.ns)
         key = self.ns + "/" + name + "/" + dispatch_key
         with warnings.catch_warnings():
             warnings.simplefilter("error")
@@ -60,7 +59,11 @@ class Library:
     def remove(self):
         for key in self.op_impls:
             impls.remove(key)
-        del fragments_for_existing_libraries[id(self)]
+        # if self.kind == "DEF":
+        #     del libraries[self.ns]
+        # else:
+        #     # kind = "FRAGMENT"
+        #     del fragments_for_existing_libraries[id(self)]
         del self.m
 
 # Every user can create their own fragment to extend existing C++ libraries
@@ -72,3 +75,10 @@ def extend_library(ns, dispatch_key=""):
     #     return Library("FRAGMENT", ns, dispatch_key)
     # else:
     #     raise ValueError("A library with name " + ns + " does not exist.")
+
+def create_library(ns):
+    return Library("DEF", ns)
+    # if not ns in libraries:
+    #     return Library("DEF", ns)
+    # else:
+    #     raise ValueError("A library with name " + ns + " already exists.")
