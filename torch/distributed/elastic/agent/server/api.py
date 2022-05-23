@@ -225,7 +225,7 @@ class WorkerState(str, Enum):
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
 
-    @staticmethod
+    @static
     def is_running(state: "WorkerState") -> bool:
         """
         Returns:
@@ -840,7 +840,7 @@ class SimpleElasticAgent(ElasticAgent):
         log.info(
             f"[{role}] starting workers for entrypoint: {spec.get_entrypoint_name()}"
         )
-
+        # 1) 初始化worker
         self._initialize_workers(self._worker_group)
         monitor_interval = spec.monitor_interval
         rdzv_handler = spec.rdzv_handler
@@ -848,6 +848,7 @@ class SimpleElasticAgent(ElasticAgent):
         while True:
             assert self._worker_group.state != WorkerState.INIT
             time.sleep(monitor_interval)
+            # 2）监控worker的状态
             run_result = self._monitor_workers(self._worker_group)
             state = run_result.state
             self._worker_group.state = state
@@ -855,6 +856,7 @@ class SimpleElasticAgent(ElasticAgent):
             put_metric(f"workers.{role}.remaining_restarts", self._remaining_restarts)
             put_metric(f"workers.{role}.{state.name.lower()}", 1)
 
+                # 2.1) 如果状态为SUCCEEDED，则同步等待所有agent完成local worker
             if state == WorkerState.SUCCEEDED:
                 log.info(
                     f"[{role}] worker group successfully finished."
@@ -863,6 +865,7 @@ class SimpleElasticAgent(ElasticAgent):
                 self._exit_barrier()
                 return run_result
             elif state in {WorkerState.UNHEALTHY, WorkerState.FAILED}:
+                # 2.2）如果状态为UNHEALTHY或FAILED，在没有超过重试次数时restart worker，否则stop worker
                 if self._remaining_restarts > 0:
                     log.info(
                         f"[{role}] Worker group {state.name}. "
@@ -877,6 +880,7 @@ class SimpleElasticAgent(ElasticAgent):
                     self._exit_barrier()
                     return run_result
             elif state == WorkerState.HEALTHY:
+                # 2.3 ）如果状态为HEALTHY, 判断当前是否有agent等待加入，如果有，则restart wokers
                 # membership changes do not count as retries
                 num_nodes_waiting = rdzv_handler.num_nodes_waiting()
                 group_rank = self._worker_group.group_rank

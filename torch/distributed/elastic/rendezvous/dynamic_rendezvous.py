@@ -389,6 +389,7 @@ class _BackendRendezvousStateHolder(_RendezvousStateHolder):
         has_set: Optional[bool]
 
         if self._dirty:
+            # 如果需要同步，则调用RendezvousBackend的set_state接口
             has_set = False
 
             state_bits = pickle.dumps(self._state)
@@ -397,6 +398,7 @@ class _BackendRendezvousStateHolder(_RendezvousStateHolder):
             if set_response is not None:
                 state_bits, token, has_set = set_response
         else:
+            # 如果不需要同步，则调用RendezvousBackend的get_state接口
             has_set = None
 
             if self._cache_duration > 0:
@@ -410,6 +412,7 @@ class _BackendRendezvousStateHolder(_RendezvousStateHolder):
                 state_bits, token = get_response
 
         if state_bits is not None:
+            # 将backend返回的state设置当当前state holder中
             try:
                 self._state = pickle.loads(state_bits)
             except pickle.PickleError as exc:
@@ -591,6 +594,7 @@ class _DistributedRendezvousOpExecutor(_RendezvousOpExecutor):
             local_id=self._node.local_id,
         )
 
+    # 在执行一个状态机
     def run(
         self,
         state_handler: Callable[[_RendezvousContext, float], _Action],
@@ -603,6 +607,7 @@ class _DistributedRendezvousOpExecutor(_RendezvousOpExecutor):
             # Reads or writes the latest rendezvous state shared by all nodes in
             # the rendezvous. Note that our local changes might get overridden
             # by another node if that node synced its changes before us.
+            # 在所有agent间同步Rendezvous State
             has_set = self._state_holder.sync()
             if has_set is not None:
                 if has_set:
@@ -625,6 +630,7 @@ class _DistributedRendezvousOpExecutor(_RendezvousOpExecutor):
 
             # Determine the next action to take based on the current state of
             # the rendezvous.
+            # 根据当前的Rendezvous State和Op来决定应该执行什么Action
             action = state_handler(ctx, deadline)
 
             if action == _Action.FINISH:
@@ -780,6 +786,7 @@ class _RendezvousExitOp:
     """Represents a rendezvous exit operation."""
 
     def __call__(self, ctx: _RendezvousContext, deadline: float) -> _Action:
+        # 若当前node在participants列表中，则从列表中删除
         if ctx.node in ctx.state.participants:
             if time.monotonic() > deadline:
                 return _Action.ERROR_TIMEOUT
@@ -801,11 +808,13 @@ class _RendezvousJoinOp:
 
         # If we are part of the rendezvous and it is already complete there is
         # no further action to take.
+        # 处理完成rendezvous的情况
         if state.complete and is_participant:
             return _Action.FINISH
 
         now = time.monotonic()
-        if now > deadline:
+        # 超时情况的处理
+        if now > deadline:            
             rollback_period = 5  # 5 seconds
 
             # If we still have time to rollback (a short period on top of the
@@ -823,6 +832,7 @@ class _RendezvousJoinOp:
                     return _Action.REMOVE_FROM_WAIT_LIST
             return _Action.ERROR_TIMEOUT
 
+        # 处理wait list的情况
         if state.complete:
             # If we are here, it means we are not part of the rendezvous. In
             # case the rendezvous has capacity for additional participants add
@@ -831,6 +841,7 @@ class _RendezvousJoinOp:
                 if ctx.node not in state.wait_list:
                     return _Action.ADD_TO_WAIT_LIST
         elif is_participant:
+        # 处理完成的情况
             # If the rendezvous has enough number of participants including us,
             # check whether we have passed the rendezvous deadline. If yes,
             # complete it.
@@ -840,6 +851,7 @@ class _RendezvousJoinOp:
         else:
             # The rendezvous is not complete yet and we are not part of it. Try
             # to join.
+            # 处理添加participans的情况
             return _Action.ADD_TO_PARTICIPANTS
 
         if _should_keep_alive(ctx):
@@ -1007,6 +1019,7 @@ class DynamicRendezvousHandler(RendezvousHandler):
         log.info(msg)
 
         try:
+            # 1) 停止心跳
             self._stop_heartbeats()
 
             # Delay the execution for a small random amount of time if this is our
@@ -1019,12 +1032,13 @@ class DynamicRendezvousHandler(RendezvousHandler):
             join_op = _RendezvousJoinOp()
 
             deadline = self._get_deadline(self._settings.timeout.join)
-
+            # 2）执行exit op
             self._op_executor.run(exit_op, deadline)
+            # 3) 执行join op
             self._op_executor.run(join_op, deadline)
-
+            # 4) 开启心跳
             self._start_heartbeats()
-
+            # 5）获取wolrd信息
             rank, world_size = self._get_world()
             store = self._get_store()
 

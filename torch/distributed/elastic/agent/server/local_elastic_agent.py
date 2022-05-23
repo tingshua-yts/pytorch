@@ -204,9 +204,11 @@ class LocalElasticAgent(SimpleElasticAgent):
             )
             return RunResult(state=WorkerState.UNKNOWN)
 
+        # 等待进程组中所有process的运行结果
         result = self._pcontext.wait(0)
         if result:
             if result.is_failed():
+                # 处理process出现fail的场景
                 # map local rank failure to global rank
                 worker_failures = {}
                 for local_rank, failure in result.failures.items():
@@ -217,6 +219,7 @@ class LocalElasticAgent(SimpleElasticAgent):
                     failures=worker_failures,
                 )
             else:
+                # 处理process 成功的场景
                 # copy ret_val_queue into a map with a global ranks
                 workers_ret_vals = {}
                 for local_rank, ret_val in result.return_values.items():
@@ -227,4 +230,5 @@ class LocalElasticAgent(SimpleElasticAgent):
                     return_values=workers_ret_vals,
                 )
         else:
+            # 此时process正在运行
             return RunResult(state=WorkerState.HEALTHY)
