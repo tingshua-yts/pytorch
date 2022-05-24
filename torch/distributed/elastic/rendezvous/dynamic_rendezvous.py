@@ -282,7 +282,7 @@ class _RendezvousState:
     complete: bool
     deadline: Optional[datetime]
     closed: bool
-    participants: Dict[_NodeDesc, int]
+    participants: Dict[_NodeDesc, int] # value为rank
     wait_list: Set[_NodeDesc]
     last_heartbeats: Dict[_NodeDesc, datetime]
 
