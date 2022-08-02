@@ -230,6 +230,7 @@ def _worker_loop(dataset_kind, dataset, index_queue, data_queue, done_event,
 
         init_exception = None
 
+        ### 调用init_fn ，然后然后创建fetcher
         try:
             if init_fn is not None:
                 init_fn(worker_id)
@@ -284,6 +285,7 @@ def _worker_loop(dataset_kind, dataset, index_queue, data_queue, done_event,
                 init_exception = None
             else:
                 try:
+                    ### 获取数据
                     data = fetcher.fetch(index)
                 except Exception as e:
                     if isinstance(e, StopIteration) and dataset_kind == _DatasetKind.Iterable:
@@ -298,6 +300,8 @@ def _worker_loop(dataset_kind, dataset, index_queue, data_queue, done_event,
                         # See NOTE [ Python Traceback Reference Cycle Problem ]
                         data = ExceptionWrapper(
                             where="in DataLoader worker process {}".format(worker_id))
+
+            ### 将数据放到data_queue中
             data_queue.put((idx, data))
             del data, idx, index, r  # save memory
     except KeyboardInterrupt:

@@ -566,8 +566,13 @@ class _SingleProcessDataLoaderIter(_BaseDataLoaderIter):
             self._dataset_kind, self._dataset, self._auto_collation, self._collate_fn, self._drop_last)
 
     def _next_data(self):
+        # 1. 通过sample iter获取index
         index = self._next_index()  # may raise StopIteration
+        
+        # 2. 按照map或iteration类型来从dataset中获取数据
         data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+
+        # 3. 处理pin memory场景
         if self._pin_memory:
             data = _utils.pin_memory.pin_memory(data)
         return data
@@ -897,13 +902,17 @@ class _MultiProcessingDataLoaderIter(_BaseDataLoaderIter):
         self._worker_init_fn = loader.worker_init_fn
         self._worker_queue_idx_cycle = itertools.cycle(range(self._num_workers))
         # No certainty which module multiprocessing_context is
+
+        ### 存放worker 产生的数据
         self._worker_result_queue = multiprocessing_context.Queue()  # type: ignore[var-annotated]
         self._worker_pids_set = False
         self._shutdown = False
         self._workers_done_event = multiprocessing_context.Event()
 
-        self._index_queues = []
-        self._workers = []
+        self._index_queues = [] # 存储worker process 使用的index queue
+        self._workers = [] # 存储所有worker process
+
+        #### 启动worker
         for i in range(self._num_workers):
             # No certainty which module multiprocessing_context is
             index_queue = multiprocessing_context.Queue()  # type: ignore[var-annotated]
