@@ -258,6 +258,7 @@ def _worker_loop(dataset_kind, dataset, index_queue, data_queue, done_event,
 
         while watchdog.is_alive():
             try:
+                ### 获取index
                 r = index_queue.get(timeout=MP_STATUS_CHECK_INTERVAL)
             except queue.Empty:
                 continue

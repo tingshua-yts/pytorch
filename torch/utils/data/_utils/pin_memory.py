@@ -25,12 +25,14 @@ def _pin_memory_loop(in_queue, out_queue, device_id, done_event):
     # logic of this function.
     while not done_event.is_set():
         try:
+            ### 获取worker产生的数据
             r = in_queue.get(timeout=MP_STATUS_CHECK_INTERVAL)
         except queue.Empty:
             continue
         idx, data = r
         if not done_event.is_set() and not isinstance(data, ExceptionWrapper):
             try:
+                ### 将数据copy到pin memory
                 data = pin_memory(data)
             except Exception:
                 data = ExceptionWrapper(
@@ -38,6 +40,7 @@ def _pin_memory_loop(in_queue, out_queue, device_id, done_event):
             r = (idx, data)
         while not done_event.is_set():
             try:
+                ### 将pin memory数据放到data_queue中
                 out_queue.put(r, timeout=MP_STATUS_CHECK_INTERVAL)
                 break
             except queue.Full:

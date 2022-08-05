@@ -937,6 +937,7 @@ class _MultiProcessingDataLoaderIter(_BaseDataLoaderIter):
             self._index_queues.append(index_queue)
             self._workers.append(w)
 
+        # 处理pin memory场景
         if self._pin_memory:
             self._pin_memory_thread_done_event = threading.Event()
 
