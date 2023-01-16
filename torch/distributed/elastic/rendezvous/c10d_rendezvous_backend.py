@@ -150,6 +150,7 @@ def _create_tcp_store(params: RendezvousParameters) -> TCPStore:
 
     # In specific cases we attempt to instantiate the store twice. For details
     # see the explanation in the except clause below.
+    # 这里的写法是为了判断tcp_store是否在当前host，对于rank0会同时走一次server和client的逻辑
     for is_server in [is_host, False]:
         try:
             store = TCPStore(
@@ -157,6 +158,7 @@ def _create_tcp_store(params: RendezvousParameters) -> TCPStore:
             )
 
             if is_server:
+                # 从这个日志来看，C10d貌似一定要一个pytorch的process来担任
                 msg = f"Process {os.getpid()} hosts the TCP store for the C10d rendezvous backend."
                 construct_and_record_rdzv_event(
                     run_id=params.run_id, message=msg, node_state=NodeState.INIT

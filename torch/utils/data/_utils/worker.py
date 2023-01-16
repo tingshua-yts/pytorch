@@ -279,7 +279,7 @@ def _worker_loop(dataset_kind, dataset, index_queue, data_queue, done_event,
                 # (None) yet. I will keep continuing until get it, and skip the
                 # processing steps.
                 continue
-            idx, index = r
+            idx, index = r # index_queue 获取的内容， idx为send index， idx of the next task to be sent to workers
             data: Union[_IterableDatasetStopIteration, ExceptionWrapper]
             if init_exception is not None:
                 data = init_exception

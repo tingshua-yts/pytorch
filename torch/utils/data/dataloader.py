@@ -378,7 +378,7 @@ class DataLoader(Generic[T_co]):
         # `.batch_sampler` if in auto-collation mode, and `.sampler` otherwise.
         # We can't change `.sampler` and `.batch_sampler` attributes for BC
         # reasons.
-        if self._auto_collation:
+        if self._auto_collation: # batch size场景
             return self.batch_sampler
         else:
             return self.sampler
@@ -1209,13 +1209,17 @@ class _MultiProcessingDataLoaderIter(_BaseDataLoaderIter):
             # Now `self._rcvd_idx` is the batch index we want to fetch
 
             # Check if the next sample has already been generated
+            # _task_info为一个tuple的list，tuple初始化时为(worker_id,)，存在数据时为(worker_id, data)，
+            # 因此这里有个length是否为2的判断，为2说明已经存在rcvd_idx所期望的data了，直接从这里返回即可
             if len(self._task_info[self._rcvd_idx]) == 2:
                 data = self._task_info.pop(self._rcvd_idx)[1]
                 return self._process_data(data)
 
             assert not self._shutdown and self._tasks_outstanding > 0
+            # 获取数据，idx为recv index
             idx, data = self._get_data()
             self._tasks_outstanding -= 1
+
             if self._dataset_kind == _DatasetKind.Iterable:
                 # Check for _IterableDatasetStopIteration
                 if isinstance(data, _utils.worker._IterableDatasetStopIteration):
@@ -1226,6 +1230,7 @@ class _MultiProcessingDataLoaderIter(_BaseDataLoaderIter):
                     self._try_put_index()
                     continue
 
+            # 当前获取的数据并不是期望的rcvd_indx，则先进行存储，用b保证获取数据的有序性
             if idx != self._rcvd_idx:
                 # store out-of-order samples
                 self._task_info[idx] += (data,)
@@ -1237,9 +1242,12 @@ class _MultiProcessingDataLoaderIter(_BaseDataLoaderIter):
         assert self._tasks_outstanding < self._prefetch_factor * self._num_workers
 
         try:
+            # 从sampler获取dataset的index
             index = self._next_index()
         except StopIteration:
             return
+
+        # 寻找下一个处理index的worker，通过轮训的方式进行寻找
         for _ in range(self._num_workers):  # find the next active worker, if any
             worker_queue_idx = next(self._worker_queue_idx_cycle)
             if self._workers_status[worker_queue_idx]:
@@ -1247,10 +1255,11 @@ class _MultiProcessingDataLoaderIter(_BaseDataLoaderIter):
         else:
             # not found (i.e., didn't break)
             return
-
+        # 将index放到对应worker的index_queue中
         self._index_queues[worker_queue_idx].put((self._send_idx, index))
         self._task_info[self._send_idx] = (worker_queue_idx,)
         self._tasks_outstanding += 1
+        # send_idx自加
         self._send_idx += 1
 
     def _process_data(self, data):

@@ -572,6 +572,7 @@ def init_process_group(
     elif init_method is None:
         init_method = "env://"
 
+    # 创建backend
     backend = Backend(backend)
 
     if backend == Backend.MPI:

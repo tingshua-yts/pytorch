@@ -120,6 +120,7 @@ class RandomSampler(Sampler[int]):
         else:
             for _ in range(self.num_samples // n):
                 yield from torch.randperm(n, generator=generator).tolist()
+            # yield from 可以理解为每次从list中拿出来一个element
             yield from torch.randperm(n, generator=generator).tolist()[:self.num_samples % n]
 
     def __len__(self) -> int:
